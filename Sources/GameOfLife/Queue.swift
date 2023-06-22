@@ -1,6 +1,6 @@
 struct Queue<Element> {
     var list = [Element]()
-    
+
     mutating func enqueue(_ element: Element) {
         self.list.append(element)
     }
