@@ -7,7 +7,7 @@ let ALIVE = true
 let DEAD = false
 let C_ALIVE: Character = "#"
 let C_DEAD: Character = " "
-let FRAME_TIME = 0.16
+var FRAME_TIME: UInt64 = UInt64(0.16 * 1_000_000_000)
 
 var grid = Array(repeating: Array(repeating: false, count: W), count: H)
 struct Instruction {
@@ -110,6 +110,8 @@ func main(scr: inout Window) async throws {
     var previousCursorPos: Coordinate? = nil
 
     try MouseEvent.register(.button1Clicked)
+    var settingsWindow: SettingsWindow? = nil
+    var frametimeWindow: FrameTimeSettingWindow? = nil
 
     // TODO: key to kill a cell
     while (true) {
@@ -138,18 +140,77 @@ func main(scr: inout Window) async throws {
                         // draw cells underneath the text in the grid
                         try scr.addChar(row: 0, col: i, grid[0][Int(i)] ? C_ALIVE : C_DEAD)
                     }
-                case "h": try? scr.move(.left)
-                case "j": try? scr.move(.down)
-                case "k": try? scr.move(.up)
-                case "l": try? scr.move(.right)
+                case "h": 
+                    if let win = frametimeWindow {
+                        win.timestep.up()
+                        frametimeWindow?.draw()
+                    } else {
+                        if settingsWindow != nil { break }
+                        try? scr.move(.left)
+                    }
+                case "j":
+                    if let win = frametimeWindow {
+                        FRAME_TIME -= win.timestep.multiplier
+                        frametimeWindow?.draw()
+                    } else {
+                        if settingsWindow != nil { break }
+                        try? scr.move(.down)
+                    }
+                case "k":
+                    if let win = frametimeWindow {
+                        FRAME_TIME += win.timestep.multiplier
+                        frametimeWindow?.draw()
+                    } else {
+                        if settingsWindow != nil { break }
+                        try? scr.move(.up)
+                    }
+                case "l":
+                    if let win = frametimeWindow {
+                        win.timestep.down()
+                        frametimeWindow?.draw()
+                    } else {
+                        if settingsWindow != nil { break }
+                        try? scr.move(.right)
+                    }
                 case "i":
+                    if settingsWindow != nil { break }
                     grid[Int(scr.yx.y)][Int(scr.yx.x)] = true
                     try scr.addChar(C_ALIVE)
                     try scr.move(.left)
                 case "u":
+                    if settingsWindow != nil { break }
                     grid[Int(scr.yx.y)][Int(scr.yx.x)] = false
                     try scr.addChar(C_DEAD)
                     try scr.move(.left)
+                case "s":
+                    if settingsWindow == nil {
+                        justToggledUpdate = true // update the menu bar
+                        settingsWindow = try SettingsWindow(
+                            rows: 1 + 2,
+                            cols: Int32(SettingsWindow.settings.map { $0.0.count }.max() ?? 10) + 2,
+                            begin: (10, 10),
+                            settings: [])
+
+                        cursorSet(.invisible)
+                    } else {
+                        justToggledUpdate = true // update the menu bar
+                        settingsWindow = nil
+                        frametimeWindow = nil
+
+                        if !shouldUpdate {
+                            cursorSet(.normal)
+                        }
+                    }
+
+                case "f":
+                    if settingsWindow == nil { break } // check if settings menu is open
+                    // open frametime window
+                    if frametimeWindow == nil {
+                        frametimeWindow = try FrameTimeSettingWindow.create(at: (10, 10 + (settingsWindow?.cols ?? 0)))
+                    } else {
+                        frametimeWindow = nil
+                        settingsWindow?.draw()
+                    }
                 default: break
                 }
             case .code(let code):
@@ -180,7 +241,7 @@ func main(scr: inout Window) async throws {
                     instruction.newValue ? C_ALIVE : C_DEAD)
             }
         } else {
-            try queue.dequeueing { instruction in
+            queue.dequeueing { instruction in
                 grid[instruction.coordinate.y][instruction.coordinate.x] = instruction.newValue
             }
             try drawAll(scr: &scr)
@@ -198,7 +259,7 @@ func main(scr: inout Window) async throws {
                 pos = scr.yx
             }
         
-            drawStatus(simulationPaused: !shouldUpdate, maxYX: scr.maxYX.tuple, scr: &scr)
+            drawStatus(simulationPaused: !shouldUpdate, inMenu: settingsWindow != nil, maxYX: scr.maxYX.tuple, scr: &scr)
             try? scr.move(row: pos.y, col: pos.x)
         }
         
@@ -212,19 +273,25 @@ func main(scr: inout Window) async throws {
 
         justToggledUpdate = false
 
+        frametimeWindow?.refresh()
+
         // elapsed time in milliseconds
-        let elapsedTime =  (CFAbsoluteTimeGetCurrent() - startTime) * 1_000
-        let shouldSleepMS = FRAME_TIME - elapsedTime
-        try await Task.sleep(nanoseconds: (shouldSleepMS > 0 ? UInt64(shouldSleepMS * 1_0000_000) : 0))
+        let elapsedTime: UInt64 =  UInt64((CFAbsoluteTimeGetCurrent() - startTime) * 1_000_000_000)
+        let shouldSleepNANOS: UInt64 = FRAME_TIME - elapsedTime
+        try await Task.sleep(nanoseconds: shouldSleepNANOS > 0 ? shouldSleepNANOS : 0)
     }
 }
 
-func drawStatus(simulationPaused: Bool, maxYX: (row: Int32, col: Int32), scr: inout Window) {
+func setFrameTime(nanoseconds: UInt64) {
+    FRAME_TIME = nanoseconds
+}
+
+func drawStatus(simulationPaused: Bool, inMenu: Bool, maxYX: (row: Int32, col: Int32), scr: inout Window) {
     if simulationPaused { 
         try? scr.print(row: 0, col: 0, "Simulation paused")
     }
 
-    let controlsShowStatus = simulationPaused ? " / <hjkl> move / <i> add cell / <u> remove cell" : ""
+    let controlsShowStatus = (simulationPaused && !inMenu) ? " / <hjkl> move / <i> add cell / <u> remove cell" : ""
 
     // TODO: clean line when simulationPaused changes
     for i in 0..<maxYX.col {
@@ -233,8 +300,85 @@ func drawStatus(simulationPaused: Bool, maxYX: (row: Int32, col: Int32), scr: in
     try? scr.print(
         row: maxYX.row - 1,
         col: 0,
-        "<p> toggle simulation / <click> add cell\(controlsShowStatus) / <Ctrl + C> exit"
+        "<p> toggle simulation \(inMenu ? "" : "/ <click> add cell")\(controlsShowStatus) / <s>\(inMenu ? " close" : "") settings / <Ctrl + C> exit"
     )
+}
+
+class SettingsWindow: ManagedWindow {
+    static var settings = [
+        // (SettingName, characterToUnderline)
+        ("frametime", 0)
+    ]
+
+    func draw() {
+        self.border()
+        Self.settings.enumerated().forEach { (idx, setting) in
+            try? self.printSetting(row: Int32(1 + idx), setting.0, underlineIndex: setting.1)
+        }
+        self.refresh()
+    }
+
+    override func onInit() {
+        self.draw()
+    }
+
+    private func printSetting(row: Int32, _ text: String, underlineIndex: Int = 0) throws {
+        let lowerEnd = text.index(text.startIndex, offsetBy: underlineIndex)
+        let upperStart = text.index(lowerEnd, offsetBy: 1)
+        let lowerString = String(text[..<lowerEnd])
+        let actionChar = String(text[lowerEnd]).first!
+        try self.print(row: row, col: 1, String(text[..<lowerEnd]))
+        try self.withAttrs(.underline) {
+            try self.addChar(row: row, col: 1 + Int32(lowerString.count), actionChar)
+        }
+        try self.print(row: row, col: 1 + Int32(lowerString.count) + 1, String(text[upperStart...]))
+    }
+}
+
+class FrameTimeSettingWindow: ManagedWindow {
+    static func create(at: (Int32, Int32)) throws -> FrameTimeSettingWindow {
+        try FrameTimeSettingWindow(rows: 5, cols: Int32("\(UInt64.max) nanoseconds".count) + 2, begin: at, settings: [])
+    }
+
+    enum Timestep: Int8 {
+        case nano
+        case mili
+        case sec
+
+        var multiplier: UInt64 {
+            switch self {
+                case .nano: return 1
+                case .mili: return 1_000_000
+                case .sec:  return 1_000_000_000
+            }
+        }
+
+        mutating func down() {
+            self = Self(rawValue: self.rawValue - 1) ?? self
+        }
+
+        mutating func up() {
+            self = Self(rawValue: self.rawValue + 1) ?? self
+        }
+    }
+
+    func draw() {
+        self.border()
+        try? self.print(row: 0, col: 1, "frametime")
+        // calculate FRAME_TIME / multiplier without converting the large FRAME_TIME number to Double
+        let mult = self.timestep.multiplier
+        let result: Double = Double(FRAME_TIME / mult) + (Double(FRAME_TIME % mult) / Double(mult))
+        try? self.print(row: 1, col: 1, "\(result) nanoseconds")
+        try? self.print(row: 2, col: 1, "<jk> change frametime")
+        try? self.print(row: 3, col: 1, "<hl> change timestep")
+        self.refresh()
+    }
+
+    var timestep: Timestep = .nano 
+
+    override func onInit() {
+        self.draw()
+    }
 }
 
 @main
