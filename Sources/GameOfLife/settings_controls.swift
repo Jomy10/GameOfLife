@@ -5,7 +5,7 @@ func setFrameTime(nanoseconds: UInt64) {
 }
 
 func drawStatus(simulationPaused: Bool, inMenu: Bool, maxYX: (row: Int32, col: Int32), scr: inout Window) {
-    if simulationPaused { 
+    if simulationPaused {
         try? scr.print(row: 0, col: 0, "Simulation paused")
     }
 
@@ -71,6 +71,14 @@ class FrameTimeSettingWindow: ManagedWindow {
             }
         }
 
+        var name: String {
+            switch self {
+                case .nano: return "nanoseconds"
+                case .mili: return "miliseconds"
+                case .sec:  return "seconds"
+            }
+        }
+
         mutating func down() {
             self = Self(rawValue: self.rawValue - 1) ?? self
         }
@@ -83,16 +91,17 @@ class FrameTimeSettingWindow: ManagedWindow {
     func draw() {
         self.border()
         try? self.print(row: 0, col: 1, "frametime")
-        // calculate FRAME_TIME / multiplier without converting the large FRAME_TIME number to Double
+        try? self.move(row: 1, col: 1)
+        try? self.clear(until: .endOfLine)
         let mult = self.timestep.multiplier
-        let result: Double = Double(FRAME_TIME / mult) + (Double(FRAME_TIME % mult) / Double(mult))
-        try? self.print(row: 1, col: 1, "\(result) nanoseconds")
+        let result: Double = Double(FRAME_TIME) / Double(mult)
+        try? self.print(row: 1, col: 1, "\(result) \(self.timestep.name)")
         try? self.print(row: 2, col: 1, "<jk> change frametime")
         try? self.print(row: 3, col: 1, "<hl> change timestep")
         self.refresh()
     }
 
-    var timestep: Timestep = .nano 
+    var timestep: Timestep = .nano
 
     override func onInit() {
         self.draw()

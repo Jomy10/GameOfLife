@@ -1,4 +1,3 @@
-
 import SwiftCurses
 import Foundation
 
@@ -24,7 +23,7 @@ func main(scr: inout Window) async throws {
             frametimeWindow: &frametimeWindow,
             scr: &scr
         )
-    
+
         let canvasChanged = setGrid(maxYX: scr.maxYX.tuple)
         if shouldUpdate { try await updateQueue() }
         if !canvasChanged {
@@ -54,11 +53,11 @@ func main(scr: inout Window) async throws {
             } else {
                 pos = scr.yx
             }
-        
+
             drawStatus(simulationPaused: !shouldUpdate, inMenu: settingsWindow != nil, maxYX: scr.maxYX.tuple, scr: &scr)
             try? scr.move(row: pos.y, col: pos.x)
         }
-        
+
         scr.refresh()
 
         do {
