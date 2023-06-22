@@ -1,4 +1,5 @@
 import SwiftCurses
+import Foundation
 
 let W = 100
 let H = 100
@@ -6,6 +7,7 @@ let ALIVE = true
 let DEAD = false
 let C_ALIVE: Character = "#"
 let C_DEAD: Character = " "
+let FRAME_TIME = 0.16
 
 var grid = Array(repeating: Array(repeating: false, count: W), count: H)
 struct Instruction {
@@ -103,25 +105,15 @@ func drawAll(scr: inout Window) throws {
 func main(scr: inout Window) async throws {
     var ch: WideChar? = nil
 
-    // grid[5][5] = true
-    // grid[5][6] = true
-    // grid[5][7] = true
-
-    // grid[0 + 10][2 + 10] = true
-    // grid[1 + 10][0 + 10] = true
-    // grid[1 + 10][2 + 10] = true
-    // grid[2 + 10][1 + 10] = true
-    // grid[2 + 10][2 + 10] = true
-
     var shouldUpdate = false
     var justToggledUpdate = true
     var previousCursorPos: Coordinate? = nil
 
     try MouseEvent.register(.button1Clicked)
 
-    // TODO: keyboard input for drawing cells as well
-    // + show mouse when drawing (simulation not started), hide when not
+    // TODO: key to kill a cell
     while (true) {
+        let startTime = CFAbsoluteTimeGetCurrent()
         // handle input
         if let ch = ch {
             switch ch {
@@ -152,7 +144,12 @@ func main(scr: inout Window) async throws {
                 case "l": try? scr.move(.right)
                 case "i":
                     grid[Int(scr.yx.y)][Int(scr.yx.x)] = true
-                    try scr.addChar(at: scr.yx, C_ALIVE)
+                    try scr.addChar(C_ALIVE)
+                    try scr.move(.left)
+                case "u":
+                    grid[Int(scr.yx.y)][Int(scr.yx.x)] = false
+                    try scr.addChar(C_DEAD)
+                    try scr.move(.left)
                 default: break
                 }
             case .code(let code):
@@ -189,12 +186,18 @@ func main(scr: inout Window) async throws {
             try drawAll(scr: &scr)
         }
 
-        if justToggledUpdate { // only draw when needed (updated)
+        if justToggledUpdate || canvasChanged { // only draw when needed (updated)
+            let pos: Coordinate
             if let previousCursorPos = previousCursorPos {
-                try scr.move(row: previousCursorPos.y, col: previousCursorPos.x)
+                if justToggledUpdate {
+                    pos = previousCursorPos
+                } else {
+                    pos = scr.yx
+                }
+            } else {
+                pos = scr.yx
             }
         
-            let pos = scr.yx
             drawStatus(simulationPaused: !shouldUpdate, maxYX: scr.maxYX.tuple, scr: &scr)
             try? scr.move(row: pos.y, col: pos.x)
         }
@@ -208,6 +211,11 @@ func main(scr: inout Window) async throws {
         }
 
         justToggledUpdate = false
+
+        // elapsed time in milliseconds
+        let elapsedTime =  (CFAbsoluteTimeGetCurrent() - startTime) * 1_000
+        let shouldSleepMS = FRAME_TIME - elapsedTime
+        try await Task.sleep(nanoseconds: (shouldSleepMS > 0 ? UInt64(shouldSleepMS * 1_0000_000) : 0))
     }
 }
 
@@ -216,7 +224,7 @@ func drawStatus(simulationPaused: Bool, maxYX: (row: Int32, col: Int32), scr: in
         try? scr.print(row: 0, col: 0, "Simulation paused")
     }
 
-    let controlsShowStatus = simulationPaused ? " / <hjkl> move / <enter> add cell" : ""
+    let controlsShowStatus = simulationPaused ? " / <hjkl> move / <i> add cell / <u> remove cell" : ""
 
     // TODO: clean line when simulationPaused changes
     for i in 0..<maxYX.col {
@@ -248,5 +256,7 @@ struct GameOfLifeApp {
         } catch {
             print(error)
         }
+
+        cursorSet(.normal)
     }
 }

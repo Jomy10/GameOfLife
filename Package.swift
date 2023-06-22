@@ -13,8 +13,5 @@ let package = Package(
         .executableTarget(
             name: "GameOfLife",
             dependencies: ["SwiftCurses"]),
-        .testTarget(
-            name: "GameOfLifeTests",
-            dependencies: ["GameOfLife"]),
     ]
 )
