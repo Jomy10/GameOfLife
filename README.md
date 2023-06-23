@@ -1,3 +1,17 @@
-# GameOfLife
+# Conway's Game Of Life
 
-A description of this package.
+Conway's Game Of Life in the terminal.
+
+![showcase](showcase.gif)
+
+## Features
+
+- Mouse and keyboard controls
+- Frametime settings
+- Pause the simulation
+
+## TODO
+
+- Settings for handling the edges of the screen
+  - buffer
+  - wrap
