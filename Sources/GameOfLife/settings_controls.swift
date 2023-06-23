@@ -54,8 +54,10 @@ class SettingsWindow: ManagedWindow {
 }
 
 class FrameTimeSettingWindow: ManagedWindow {
+    static let windowSize = Int32("\(UInt64.max) nanoseconds".count) + 2
+
     static func create(at: (Int32, Int32)) throws -> FrameTimeSettingWindow {
-        try FrameTimeSettingWindow(rows: 5, cols: Int32("\(UInt64.max) nanoseconds".count) + 2, begin: at, settings: [])
+        try FrameTimeSettingWindow(rows: 5, cols: Self.windowSize, begin: at, settings: [])
     }
 
     enum Timestep: Int8 {
@@ -91,8 +93,10 @@ class FrameTimeSettingWindow: ManagedWindow {
     func draw() {
         self.border()
         try? self.print(row: 0, col: 1, "frametime")
-        try? self.move(row: 1, col: 1)
-        try? self.clear(until: .endOfLine)
+
+        // clear the first line of the window
+        try? self.print(row: 1, col: 1, Array(repeating: "", count: Int(Self.windowSize - 2)).joined(separator: " "))
+
         let mult = self.timestep.multiplier
         let result: Double = Double(FRAME_TIME) / Double(mult)
         try? self.print(row: 1, col: 1, "\(result) \(self.timestep.name)")
