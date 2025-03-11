@@ -6,8 +6,7 @@ let package = Package(
     name: "GameOfLife",
     platforms: [.macOS(.v10_15)],
     dependencies: [
-        // .package(url: "https://github.com/Jomy10/SwiftCurses", branch: "master")
-        .package(name: "SwiftCurses", path: "/Users/jonaseveraert/Documents/projects/ncurses-swift")
+        .package(url: "https://github.com/Jomy10/SwiftCurses", branch: "master")
     ],
     targets: [
         .executableTarget(
